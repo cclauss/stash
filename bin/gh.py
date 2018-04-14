@@ -10,9 +10,13 @@ supported commands are:
 	gh create_key <title> [<public_key_path>] add a key to github (or create new key if none exist)
 For all commands, use gh <command> --help for more detailed help
 
-NOTE: assumes a keychain user/pass stored in 	keychainservice='stash.git.github.com', which is also the default from the git module.  
+NOTE: assumes a keychain user/pass stored in 	keychainservice='stash.git.github.com', which is also the default from the git module.
 
 '''
+import os
+import sys
+
+
 def install_module_from_github(username, package_name, folder, version):
     """
     Install python module from github zip files
@@ -42,7 +46,7 @@ except ImportError:
     print 'no github found in ',libpath
     install_module_from_github('pygithub', 'pygithub', 'github','master')
     import github
-try: 
+try:
 	import docopt
 except  ImportError:
 	install_module_from_github('docopt','docopt','docopt.py','master')
@@ -79,7 +83,7 @@ def gh_fork( args):
 
 			Fork a repo to your own github account.
 			<repo>	-  repo name of form user/repo
-			
+
 	'''
 	console.show_activity()
 	g,user = setup_gh()
@@ -92,10 +96,10 @@ def gh_fork( args):
 			pass
 	finally:
 		console.hide_activity()
-		
+
 @command
 def gh_create(args):
-	'''Usage: gh create [options] <name> 
+	'''Usage: gh create [options] <name>
 
 	Options:
 	-h, --help             This message
@@ -107,8 +111,8 @@ def gh_create(args):
 	-d, --has_downloads    has downloads
 	-a, --auto_init     		create readme and first commit
 	-g <ign>, --gitignore_template <ign>  create gitignore using string
-	
-	
+
+
 	'''
 	kwargs= {key[2:]:value for key,value in args.items() if key.startswith('--') and value}
 	console.show_activity()
@@ -118,7 +122,7 @@ def gh_create(args):
 		print ('Created %s'%r.html_url)
 	finally:
 		console.hide_activity()
-		
+
 def parse_branch(userinput):
 	if ':' in userinput:
 		owner,branch=userinput.split(':')
@@ -126,13 +130,13 @@ def parse_branch(userinput):
 		owner=userinput
 		branch='master'
 	return owner,branch
-	
+
 def parent_owner(user,reponame):
 	return user.get_repo(reponame).parent.owner.login
 
 @command
 def gh_pull(args):
-	'''Usage: 
+	'''Usage:
 	gh pull <reponame> <base> [<head>]
 	gh pull <reponame> <base> [<head>] --title <title> [--body <body>]
 	gh pull <reponame> <base> [<head>] -i <issue>
@@ -143,10 +147,10 @@ Options:
 	-b <body>, --body <body>  		Body of pull request [default: ]
 	-i <issue>, --issue <issue>  	Issue number
 Examples:
-	gh pull stash ywangd jsbain 
+	gh pull stash ywangd jsbain
 	gh pull stash ywangd:dev jsbain:dev
 	gh pull stash :dev :master
-			
+
 	base and head should be in the format owner:branch.
 	if base owner is omitted, owner of parent repo is used.
 	if head owner is omitted, user is used
@@ -166,9 +170,9 @@ Examples:
 		headowner,headbranch=parse_branch(args['<head>'])
 		if not headowner:
 			headowner=user.login
-		
+
 		baserepo = g.get_user(baseowner).get_repo(reponame)
-		
+
 		kwargs={}
 		if args['--issue']:
 			kwargs['issue']=baserepo.get_issue(args['--issue'])
@@ -183,7 +187,7 @@ Examples:
 		kwargs['head']=':'.join([headowner,headbranch])
 		pullreq=baserepo.create_pull(**kwargs)
 
-		
+
 		print ('Created pull %s'%pullreq.html_url)
 		print ('Commits:')
 		print([(x.sha, x.commit.message) for x in pullreq.get_commits()])
@@ -205,10 +209,10 @@ List keys
 	g,u=setup_gh()
 	for key in u.get_keys():
 		print('{}:\n {}\n'.format(key.title,key.key))
-	
+
 @command
 def gh_create_key(args):
-	'''Usage: 
+	'''Usage:
 	gh create_key <title> [<public_key_path>]
 
 Options:
@@ -220,7 +224,7 @@ Examples:
 	'''
 	title=args['<title>']
 	default_keyfile=os.path.expanduser('~/.ssh/id_rsa.pub')
-	if not args['<public_key_path>']:		
+	if not args['<public_key_path>']:
 		if not os.path.exists(default_keyfile):
 			print('Creating a ssh key in ~/.ssh/')
 			cmd_string = '''
@@ -237,8 +241,8 @@ Examples:
 	g,u=setup_gh()
 	with open(args['<public_key_path>']) as pubkey:
 		u.create_key(title,pubkey.read())
-		
-	
+
+
 
 def setup_gh():
 	keychainservice='stash.git.github.com'
@@ -246,14 +250,14 @@ def setup_gh():
 	pw = keychain.get_password(keychainservice, user)
 	g=Github(user,pw)
 	u=g.get_user()
-	
+
 	return g, u
 
 if __name__=='__main__':
 	import sys
 	if len(sys.argv)==1:
 		sys.argv.append('--help')
-		
+
 	args=docopt(__doc__, version='0.1', options_first=True)
 	cmd=args['<command>']
 	argv=[cmd]+args['<args>']

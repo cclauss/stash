@@ -13,10 +13,11 @@ optional arguments:
   -k KEY, --key KEY  Encrypt/Decrypt Key.
   -d, --decrypt      Flag to decrypt.
 '''
-import os
 import argparse
 import base64
+import os
 
+_stash = globals()['_stash']
 try:
 	import pyaes
 except:
@@ -24,12 +25,12 @@ except:
 	_stash('pip install pyaes')
 	import pyaes
 
-	
+
 class Crypt(object):
 	def __init__(self, in_filename, out_filename=None):
 		self.in_filename = in_filename
 		self.out_filename = out_filename
-		
+
 	def aes_encrypt(self, key=None, chunksize=64*1024):
 		self.out_filename = self.out_filename or self.in_filename + '.enc'
 		if key is None:
@@ -39,16 +40,16 @@ class Crypt(object):
 			with open(self.out_filename, 'wb') as outfile:
 				pyaes.encrypt_stream(aes, infile, outfile)
 		return key
-						
+
 	def aes_decrypt(self, key, chunksize=64*1024):
 		self.out_filename = self.out_filename or os.path.splitext(self.in_filename)[0]
 		aes = pyaes.AESModeOfOperationCTR(key)
-		
+
 		with open(self.in_filename, 'rb') as infile:
 			with open(self.out_filename, 'wb') as outfile:
 				pyaes.decrypt_stream(aes, infile, outfile)
-				
-				
+
+
 if __name__ == '__main__':
 	ap = argparse.ArgumentParser()
 	ap.add_argument(

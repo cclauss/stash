@@ -1,12 +1,14 @@
 
-from dulwich.diff_tree import _tree_entries, _NULL_ENTRY, TreeEntry, _is_tree
-from gittle import Gittle
-from dulwich import porcelain
-import stat
-from git import diff3
-from git.gitutils import _get_repo, find_revision_sha, can_ff, merge_base, count_commits_between, is_ancestor, get_remote_tracking_branch, GitError
 import argparse
+import os
+import stat
 
+from dulwich import porcelain
+from dulwich.diff_tree import _NULL_ENTRY, TreeEntry, _is_tree, _tree_entries
+from git import diff3, git_reset
+from git.gitutils import (GitError, _get_repo, count_commits_between,
+                          find_revision_sha, get_remote_tracking_branch,
+                          merge_base)
 
 
 def _merge_entries(path, trees):
@@ -23,7 +25,7 @@ def _merge_entries(path, trees):
     entries=[]
     for tree in trees:
         entries.append(_tree_entries(path, tree))
-    
+
     inds=[]
     lens=[]
     for e in entries:
@@ -38,18 +40,18 @@ def _merge_entries(path, trees):
         merged=[e if e.path == minpath else _NULL_ENTRY for e in next_entry]
         result.append(merged)
         inds=[ind+1 if e.path == minpath else ind for e,ind in zip(next_entry,inds)]
-        
+
     return result
-    
+
 def all_eq(entries):
     all([i==j for i in entries for j in entries])
-    
+
 def first_nonempty(entries):
     result=None
     for entry in entries:
         result=result or entry
     return result
-    
+
 def walk_trees(store, tree_ids,prune_identical=False):
     """Recursively walk all the entries of N trees.
 
@@ -90,13 +92,13 @@ def merge_trees(store, base, mine, theirs):
     w=walk_trees(store,[base,mine, theirs],True)
     count = 0
     for b,m,t in w:
-        
+
         if _is_tree(b) or _is_tree(m) or _is_tree(t):
         #todo... handle mkdir, rmdir
-            continue 
-        
+            continue
+
         # if mine == theirs match, use either
-        elif m==t: 
+        elif m==t:
             if not b.path:
                 print '  ',m.path, 'was added, but matches already'
             continue    #leave workng tree alone
@@ -111,7 +113,7 @@ def merge_trees(store, base, mine, theirs):
             removed.append(m.path)
         elif not b.path and m.path and not t.path:  #add in mine
             print '  ',m.path ,'added in mine'
-            continue 
+            continue
         elif not b.path and t.path and not m.path: # add theirs to mine
             # add theirs
             print '  +',t.path, ': adding to head'
@@ -136,25 +138,25 @@ def merge_trees(store, base, mine, theirs):
 
 def mergecommits(store,base,mine,theirs):
     merge_trees(store,store[base].tree,store[mine].tree,store[theirs].tree)
-    
+
 def merge(args):
     helptext='''git merge' [--msg <msg>] [<commit>]
     git merge --abort\n
-    
+
     merges <commit> into HEAD, or remote tracking branch if commit not specified.
     <commit> can be a local or remote ref, or an existing commit sha.
 
-    merge will handle unambiguous conflicts between head and other 
-    merge head, and will insert conflict markers if conflicts cannot be resolved.  
-    note that the strategy used will prefer changes in the local head.  
-    for instance, if HEAD deleted a section, while MERGE_HEAD modified the same 
+    merge will handle unambiguous conflicts between head and other
+    merge head, and will insert conflict markers if conflicts cannot be resolved.
+    note that the strategy used will prefer changes in the local head.
+    for instance, if HEAD deleted a section, while MERGE_HEAD modified the same
     action, the section will be deleted from the final without indicating a conflict.
-      
+
     be sure to commit any local changes before running merge, as files in working tree (i.e on disk) are changed, and checked in, which will probably overwrite any local uncomitted changes.
-    
+
     note merge will not actually commit anything.  run git commit to commit a successful merge.
 
-    
+
     --abort will remove the MERGE_HEAD and MERGE_MSG files, and will reset staging area, but wont affect files on disk.  use git reset --hard or git checkout if this is desired.
     '''
     repo=_get_repo()
@@ -165,7 +167,7 @@ def merge(args):
     parser.add_argument('--msg',nargs=1,action='store',help='commit message to store')
     parser.add_argument('--abort',action='store_true',help='abort in progress merge attempt')
     result=parser.parse_args(args)
-    
+
     if result.abort:
         print 'attempting to undo merge.  beware, files in working tree are not touched.  \nused git reset --hard to revert particular files'
         git_reset([])
@@ -173,7 +175,7 @@ def merge(args):
         os.remove(os.path.join(repo.repo.controldir(),'MERGE_MSG'))
 
     #todo: check for uncommitted changes and confirm
-    
+
     # first, determine merge head
     merge_head = find_revision_sha(repo,result.commit or get_remote_tracking_branch(repo,repo.active_branch))
     if not merge_head:
@@ -186,11 +188,11 @@ def merge(args):
     if base_sha==head:
         print 'Fast forwarding {} to {}'.format(repo.active_branch,merge_head)
         repo.refs['HEAD']=merge_head
-        return 
+        return
     if base_sha == merge_head:
         print 'head is already up to date'
-        return  
-    
+        return
+
     print 'merging <{}> into <{}>\n{} commits ahead of merge base <{}> respectively'.format(merge_head[0:7],head[0:7],count_commits_between(repo,merge_head,head),base_sha[0:7])
     base_tree=repo[base_sha].tree
     merge_head_tree=repo[merge_head].tree
@@ -198,25 +200,24 @@ def merge(args):
 
     num_conflicts,added,removed=merge_trees(repo.repo.object_store, base_tree,head_tree,merge_head_tree)
     # update index
-    if added: 
+    if added:
         porcelain.add(repo.path, added)
-    if removed: 
+    if removed:
         porcelain.rm(repo.path, removed)
 
     repo.repo._put_named_file('MERGE_HEAD',merge_head)
     repo.repo._put_named_file('MERGE_MSG','Merged from {}({})'.format(merge_head, result.commit))
     print 'Merge complete with {} conflicted files'.format(num_conflicts)
-    print '''Merged files were added to the staging area, but have not yet been comitted.   
-    Review changes (e.g.   git diff   or   git diff>changes.txt; edit changes.txt    ), and 
-    resolve any conflict markers before comitting.  
-    
-    Use   git add     on any files updated after resolving conflicts.  
+    print '''Merged files were added to the staging area, but have not yet been comitted.
+    Review changes (e.g.   git diff   or   git diff>changes.txt; edit changes.txt    ), and
+    resolve any conflict markers before comitting.
+
+    Use   git add     on any files updated after resolving conflicts.
     Run   git commit  to complete the merge process.
-    
+
     '''
 
-        
+
 if __name__=='__main__':
     import sys
     merge(sys.argv[1:])
-    
